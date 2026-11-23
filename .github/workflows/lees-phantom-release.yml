@@ -94,13 +94,20 @@ jobs:
 
       - name: 拉取最新 mihomo 内核与 GeoIP 数据库
         working-directory: private-source
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          bash scripts/fetch-mihomo.sh
-          mkdir -p Resources/geo
-          curl -fL --retry 3 --retry-delay 2 \
-            "https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geoip.metadb" \
-            -o Resources/geo/geoip.metadb
+          mkdir -p Resources/bin Resources/geo
+          TMP_DL="$(mktemp -d)"
+          trap 'rm -rf "$TMP_DL"' EXIT
+          gh release download --repo MetaCubeX/mihomo --pattern 'mihomo-darwin-arm64-v*.gz' --dir "$TMP_DL"
+          GZ_FILE="$(ls "$TMP_DL"/mihomo-darwin-arm64-v*.gz | head -n 1)"
+          gunzip -c "$GZ_FILE" > Resources/bin/mihomo
+          chmod +x Resources/bin/mihomo
+          Resources/bin/mihomo -v
+          gh release download --repo MetaCubeX/meta-rules-dat --pattern 'geoip.metadb' --output Resources/geo/geoip.metadb
+          ls -lh Resources/bin/mihomo Resources/geo/geoip.metadb
 
       - name: 编译组装 Phantom.app、APFS 拖拽安装 DMG 与应用内更新包
         env:
