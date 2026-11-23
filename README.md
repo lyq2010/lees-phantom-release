@@ -26,7 +26,7 @@
 - **双模式流量接管** — 一键开启系统代理或增强模式（TUN），按住 `Option` 点击菜单即可复制局域网终端代理导出命令。
 - **兼容配置与模块覆写** — 原生支持 Clash / Mihomo YAML，并内置 Surge 配置导入转换（含语法校验与警告提示）、覆写模块及自定义规则管理。
 
-当前版本 **1.0.1** 面向 Apple Silicon（macOS 14.0+）提供开箱即用的 `.dmg` 安装包（已内嵌 `mihomo` 内核与 `geoip.metadb`）。Intel Mac 与 Windows 不在当前发行范围。
+当前版本 **1.0.2** 面向 Apple Silicon（macOS 14.0+）提供开箱即用的 `.dmg` 安装包（已内嵌 `mihomo` 内核与 `geoip.metadb`）。Intel Mac 与 Windows 不在当前发行范围。
 
 ## 常用能力
 
@@ -43,7 +43,7 @@
 
 | 平台 | 适用设备 | 安装文件 | 更新记录 |
 | --- | --- | --- | --- |
-| Mac | Apple Silicon，macOS 14.0+ | `lees-phantom-1.0.1-macos-aarch64.dmg` | [发行版](https://github.com/lyq2010/lees-phantom-release/releases) |
+| Mac | Apple Silicon，macOS 14.0+ | `lees-phantom-1.0.2-macos-aarch64.dmg` | [发行版](https://github.com/lyq2010/lees-phantom-release/releases) |
 
 ### Mac 安装与自动更新
 
