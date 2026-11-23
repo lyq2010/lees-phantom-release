@@ -1,0 +1,188 @@
+name: Phantom Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: 私有源码仓 lyq2010/lees-phantom 固定的 40 位提交 SHA
+        required: true
+        type: string
+      version:
+        description: 发布版本号（如 1.0.0）
+        required: true
+        type: string
+      publish:
+        description: 创建公开 GitHub Release 并上传资产；仅构建验包保持 false
+        required: false
+        default: false
+        type: boolean
+      run_tests:
+        description: 构建前运行 swift test 单元测试
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lees-phantom-release
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      revision: ${{ steps.check.outputs.revision }}
+      version: ${{ steps.check.outputs.version }}
+      tag: ${{ steps.check.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: 校验源码 SHA、版本号与发行说明
+        id: check
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          VERSION: ${{ inputs.version }}
+          PUBLISH: ${{ inputs.publish }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]] || { echo "source_sha 必须为 40 位小写十六进制提交 SHA" >&2; exit 1; }
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "version 必须为 X.Y.Z 格式" >&2; exit 1; }
+          TAG="phantom-v${VERSION}"
+          if [[ "$PUBLISH" == "true" ]]; then
+            if [[ ! -f "release-tools/lees-phantom/notes-${VERSION}.md" ]] && ! grep -q "^## ${VERSION} " CHANGELOG.md; then
+              echo "缺少 release-tools/lees-phantom/notes-${VERSION}.md 或 CHANGELOG.md 中对应 ${VERSION} 条目" >&2
+              exit 1
+            fi
+          fi
+          echo "revision=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+  build-macos:
+    needs: validate
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: release-repo
+          persist-credentials: false
+
+      - name: 检出私有源码仓固定提交
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: lyq2010/lees-phantom
+          ref: ${{ needs.validate.outputs.revision }}
+          ssh-key: ${{ secrets.PHANTOM_SOURCE_SSH_KEY }}
+          path: private-source
+          persist-credentials: false
+          show-progress: false
+
+      - name: 检查 Swift 与 Xcode 工具链
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          swift --version
+
+      - name: 运行核心单元测试
+        if: ${{ inputs.run_tests }}
+        working-directory: private-source
+        run: swift test
+
+      - name: 拉取最新 mihomo 内核与 GeoIP 数据库
+        working-directory: private-source
+        run: |
+          set -euo pipefail
+          bash scripts/fetch-mihomo.sh
+          mkdir -p Resources/geo
+          curl -fL --retry 3 --retry-delay 2 \
+            "https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geoip.metadb" \
+            -o Resources/geo/geoip.metadb
+          ls -lh Resources/bin/mihomo Resources/geo/geoip.metadb
+
+      - name: 编译并组装 Phantom.app
+        working-directory: private-source
+        env:
+          APP_VERSION: ${{ needs.validate.outputs.version }}
+          APP_BUILD: ${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          bash scripts/bundle-app.sh
+
+      - name: 制作 APFS DMG、挂载验签并生成 SHA256SUMS
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          set -euo pipefail
+          chmod +x release-repo/release-tools/lees-phantom/package-dmg.sh
+          bash release-repo/release-tools/lees-phantom/package-dmg.sh \
+            private-source/dist/Phantom.app \
+            "$VERSION" \
+            public-assets
+
+      - name: 仅上传公开白名单产物
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: lees-phantom-macos
+          path: |
+            public-assets/phantom-*-macos-aarch64.dmg
+            public-assets/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    if: ${{ !cancelled() && inputs.publish && needs.build-macos.result == 'success' }}
+    needs: [validate, build-macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.validate.outputs.version }}
+      TAG: ${{ needs.validate.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: lees-phantom-macos
+          path: public-assets
+
+      - name: 复核 SHA256SUMS
+        working-directory: public-assets
+        run: sha256sum -c SHA256SUMS
+
+      - name: 提取本次版本说明
+        run: |
+          set -euo pipefail
+          NOTES_FILE="release-tools/lees-phantom/notes-${VERSION}.md"
+          if [[ -f "$NOTES_FILE" ]]; then
+            cp "$NOTES_FILE" release-notes.md
+          else
+            awk -v ver="$VERSION" '
+              $0 ~ "^## " ver " " { found=1; next }
+              found && /^## / { exit }
+              found { print }
+            ' CHANGELOG.md > release-notes.md
+          fi
+          test -s release-notes.md || { echo "release-notes.md 为空" >&2; exit 1; }
+
+      - name: 发布公开 GitHub Release
+        run: |
+          set -euo pipefail
+          DMG="public-assets/phantom-${VERSION}-macos-aarch64.dmg"
+          SUMS="public-assets/SHA256SUMS"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$DMG" "$SUMS" --clobber
+            gh release edit "$TAG" --title "Phantom ${VERSION}" --notes-file release-notes.md
+          else
+            gh release create "$TAG" "$DMG" "$SUMS" \
+              --title "Phantom ${VERSION}" \
+              --notes-file release-notes.md
+          fi
