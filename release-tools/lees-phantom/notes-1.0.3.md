@@ -1,0 +1,5 @@
+- 🪟 深色模式窗口底色全面切换为原生毛玻璃材质（`NSVisualEffectView`），搭配半透明暗面卡片与中性玻璃控件，对齐 Surge Mac 视觉层次。
+- 🧠 修复开启增强模式（TUN / setuid 权限）后首页「内核内存」持续显示 `0 B` 的问题，自动后台回退真实 RSS 采集与内核 `/connections` 内存兜底。
+- 📐 新增主窗口、仪表盘、实时速度浮窗及基准测试/网络诊断窗口的尺寸与位置持久化，支持多显示器拔出后自动回退居中。
+- 🧭 仪表盘「最近请求 / 活动请求」中规则列旁的「策略」列改为直接展示最终落地的具体节点（支持按节点排序与搜索，悬停可查看完整策略链路）。
+- 🧩 兼容导入 OpenClash YAML 配置：自动将 `type: smart` 策略组转为标准上游内核 `select` 并完整交由 Phantom 本地 Smart 策略引擎驱动，修复 `include-all` / `include-all-providers` 误报警告，并保留 `fake-ip-filter` 中的 `rule-set:` / `geosite:` 条目。
