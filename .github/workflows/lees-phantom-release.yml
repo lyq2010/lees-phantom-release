@@ -190,7 +190,7 @@ jobs:
           name: lees-phantom-verified
           path: public-assets
       - run: sudo apt-get update -qq && sudo apt-get install -y minisign
-      - run: python3 -m pip install cos-python-sdk-v5==1.9.38
+      - run: python3 -m pip install cos-python-sdk-v5==1.9.45
       - run: python3 release-tools/lees-phantom/mirror.py stage cos public-assets
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -251,7 +251,7 @@ jobs:
           path: public-assets
           merge-multiple: true
       - run: sudo apt-get update -qq && sudo apt-get install -y minisign
-      - run: python3 -m pip install cos-python-sdk-v5==1.9.38
+      - run: python3 -m pip install cos-python-sdk-v5==1.9.45
       - name: 从 GitHub 取得并验签旧版清单（不读取存储桶正文）
         run: python3 release-tools/lees-phantom/previous.py public-assets
       - name: 仅以 COS HEAD 与 R2 列表元数据复核并晋升双源 latest.json
@@ -281,7 +281,7 @@ jobs:
           name: lees-phantom-verified
           path: public-assets
       - run: sudo apt-get update -qq && sudo apt-get install -y minisign
-      - run: python3 -m pip install cos-python-sdk-v5==1.9.38
+      - run: python3 -m pip install cos-python-sdk-v5==1.9.45
       - run: python3 release-tools/lees-phantom/prune.py cos public-assets
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -311,7 +311,7 @@ jobs:
           name: lees-phantom-verified
           path: public-assets
       - run: sudo apt-get update -qq && sudo apt-get install -y minisign
-      - run: python3 -m pip install cos-python-sdk-v5==1.9.38
+      - run: python3 -m pip install cos-python-sdk-v5==1.9.45
       - run: python3 release-tools/lees-phantom/prune.py r2 public-assets
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

@@ -37,7 +37,7 @@ def upload(source, key, file, base, mutable=False):
                 "exec",
                 "--yes",
                 "--package",
-                "wrangler@4.90.0",
+                "wrangler@4.166.0",
                 "--",
                 "wrangler",
                 "r2",
