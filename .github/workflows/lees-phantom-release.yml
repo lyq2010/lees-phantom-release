@@ -17,9 +17,9 @@ on:
         default: false
         type: boolean
       run_tests:
-        description: 额外运行全量 swift test（更新器核心单测始终运行）
+        description: 构建前运行全量 swift test 单元测试
         required: false
-        default: false
+        default: true
         type: boolean
 
 permissions:
@@ -87,11 +87,7 @@ jobs:
           brew install minisign
           python3 -m pip install --break-system-packages --require-hashes -r private-source/packaging/macos/dmg/requirements.txt
 
-      - name: 运行更新器验签与清理契约测试
-        working-directory: private-source
-        run: swift test --filter PhantomUpdaterTests
-
-      - name: 运行全量单元测试（可选）
+      - name: 运行全量核心与更新器单元测试
         if: ${{ inputs.run_tests }}
         working-directory: private-source
         run: swift test
