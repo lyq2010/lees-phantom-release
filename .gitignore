@@ -2,3 +2,5 @@
 public-assets/
 *.dmg
 release-notes.md
+__pycache__/
+*.pyc

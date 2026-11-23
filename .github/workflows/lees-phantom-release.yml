@@ -12,14 +12,14 @@ on:
         required: true
         type: string
       publish:
-        description: 创建公开 GitHub Release 并上传资产；仅构建验包保持 false
+        description: 经确认后上传主 COS + 备 R2 并发布 GitHub Release；仅构建验包保持 false
         required: false
         default: false
         type: boolean
       run_tests:
-        description: 构建前运行 swift test 单元测试
+        description: 额外运行全量 swift test（更新器核心单测始终运行）
         required: false
-        default: true
+        default: false
         type: boolean
 
 permissions:
@@ -35,37 +35,31 @@ jobs:
     outputs:
       revision: ${{ steps.check.outputs.revision }}
       version: ${{ steps.check.outputs.version }}
-      tag: ${{ steps.check.outputs.tag }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: 校验源码 SHA、版本号与发行说明
+      - name: 校验源码 SHA、版本号与版本说明
         id: check
         env:
           SOURCE_SHA: ${{ inputs.source_sha }}
           VERSION: ${{ inputs.version }}
-          PUBLISH: ${{ inputs.publish }}
         run: |
           set -euo pipefail
           [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]] || { echo "source_sha 必须为 40 位小写十六进制提交 SHA" >&2; exit 1; }
-          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "version 必须为 X.Y.Z 格式" >&2; exit 1; }
-          TAG="phantom-v${VERSION}"
-          if [[ "$PUBLISH" == "true" ]]; then
-            if [[ ! -f "release-tools/lees-phantom/notes-${VERSION}.md" ]] && ! grep -q "^## ${VERSION} " CHANGELOG.md; then
-              echo "缺少 release-tools/lees-phantom/notes-${VERSION}.md 或 CHANGELOG.md 中对应 ${VERSION} 条目" >&2
-              exit 1
-            fi
-          fi
+          [[ "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || { echo "version 必须为 X.Y.Z 格式" >&2; exit 1; }
+          test -f "release-tools/lees-phantom/notes-${VERSION}.md" || { echo "缺少 release-tools/lees-phantom/notes-${VERSION}.md" >&2; exit 1; }
           echo "revision=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
   build-macos:
     needs: validate
     runs-on: macos-26
     timeout-minutes: 60
+    env:
+      PHANTOM_UPDATER_PRIVATE_KEY: ${{ secrets.PHANTOM_UPDATER_PRIVATE_KEY }}
+      PHANTOM_UPDATER_PRIVATE_KEY_PASSWORD: ${{ secrets.PHANTOM_UPDATER_PRIVATE_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -82,13 +76,22 @@ jobs:
           persist-credentials: false
           show-progress: false
 
-      - name: 检查 Swift 与 Xcode 工具链
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: 安装固定版本的 DMG 布局工具与 Minisign
         run: |
           set -euo pipefail
-          xcodebuild -version
-          swift --version
+          brew install minisign
+          python3 -m pip install --break-system-packages --require-hashes -r private-source/packaging/macos/dmg/requirements.txt
 
-      - name: 运行核心单元测试
+      - name: 运行更新器验签与清理契约测试
+        working-directory: private-source
+        run: swift test --filter PhantomUpdaterTests
+
+      - name: 运行全量单元测试（可选）
         if: ${{ inputs.run_tests }}
         working-directory: private-source
         run: swift test
@@ -102,48 +105,40 @@ jobs:
           curl -fL --retry 3 --retry-delay 2 \
             "https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geoip.metadb" \
             -o Resources/geo/geoip.metadb
-          ls -lh Resources/bin/mihomo Resources/geo/geoip.metadb
 
-      - name: 编译并组装 Phantom.app
-        working-directory: private-source
+      - name: 编译组装 Phantom.app、APFS 拖拽安装 DMG 与应用内更新包
         env:
           APP_VERSION: ${{ needs.validate.outputs.version }}
           APP_BUILD: ${{ github.run_number }}
+          PHANTOM_BUILD_SHA: ${{ needs.validate.outputs.revision }}
         run: |
           set -euo pipefail
-          bash scripts/bundle-app.sh
+          mkdir -p public-assets
+          bash private-source/packaging/macos/package.sh "$(pwd)/public-assets"
+          node release-repo/release-tools/lees-phantom/asset.mjs \
+            "$(pwd)/public-assets" \
+            darwin-aarch64 \
+            "$APP_VERSION" \
+            private-source/dist/Phantom.app/Contents/MacOS/Phantom \
+            "lees-phantom-${APP_VERSION}-macos-aarch64.dmg" \
+            "lees-phantom-${APP_VERSION}-macos-aarch64.app.tar.gz"
 
-      - name: 制作 APFS DMG、挂载验签并生成 SHA256SUMS
-        env:
-          VERSION: ${{ needs.validate.outputs.version }}
-        run: |
-          set -euo pipefail
-          chmod +x release-repo/release-tools/lees-phantom/package-dmg.sh
-          bash release-repo/release-tools/lees-phantom/package-dmg.sh \
-            private-source/dist/Phantom.app \
-            "$VERSION" \
-            public-assets
-
-      - name: 仅上传公开白名单产物
+      - name: 仅上传公开白名单签名产物
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: lees-phantom-macos
           path: |
-            public-assets/phantom-*-macos-aarch64.dmg
-            public-assets/SHA256SUMS
+            public-assets/lees-phantom-*-macos-aarch64.dmg
+            public-assets/lees-phantom-*-macos-aarch64.dmg.minisig
+            public-assets/lees-phantom-*-macos-aarch64.app.tar.gz
+            public-assets/lees-phantom-*-macos-aarch64.app.tar.gz.minisig
+            public-assets/darwin-aarch64.json
           if-no-files-found: error
           retention-days: 7
 
-  publish:
-    if: ${{ !cancelled() && inputs.publish && needs.build-macos.result == 'success' }}
+  verify-artifacts:
     needs: [validate, build-macos]
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    env:
-      GH_TOKEN: ${{ github.token }}
-      VERSION: ${{ needs.validate.outputs.version }}
-      TAG: ${{ needs.validate.outputs.tag }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -154,35 +149,176 @@ jobs:
           name: lees-phantom-macos
           path: public-assets
 
-      - name: 复核 SHA256SUMS
-        working-directory: public-assets
-        run: sha256sum -c SHA256SUMS
+      - run: sudo apt-get update -qq && sudo apt-get install -y minisign
 
-      - name: 提取本次版本说明
+      - name: 签发 Ed25519 发行清单并本地全量验签
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+          SOURCE_SHA: ${{ needs.validate.outputs.revision }}
+          PHANTOM_RELEASE_PRIVATE_KEY: ${{ secrets.PHANTOM_RELEASE_PRIVATE_KEY }}
         run: |
           set -euo pipefail
-          NOTES_FILE="release-tools/lees-phantom/notes-${VERSION}.md"
-          if [[ -f "$NOTES_FILE" ]]; then
-            cp "$NOTES_FILE" release-notes.md
-          else
-            awk -v ver="$VERSION" '
-              $0 ~ "^## " ver " " { found=1; next }
-              found && /^## / { exit }
-              found { print }
-            ' CHANGELOG.md > release-notes.md
-          fi
-          test -s release-notes.md || { echo "release-notes.md 为空" >&2; exit 1; }
+          node release-tools/lees-phantom/manifest.mjs public-assets "$VERSION" "$SOURCE_SHA"
+          node release-tools/lees-phantom/verify.mjs public-assets > public-assets/verification.json
 
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: lees-phantom-verified
+          path: |
+            public-assets/lees-phantom-*.dmg
+            public-assets/lees-phantom-*.dmg.minisig
+            public-assets/lees-phantom-*.app.tar.gz
+            public-assets/lees-phantom-*.app.tar.gz.minisig
+            public-assets/darwin-aarch64.json
+            public-assets/release-manifest.json
+            public-assets/SHA256SUMS
+            public-assets/verification.json
+          if-no-files-found: error
+          retention-days: 7
+
+  mirror-cos:
+    if: ${{ !cancelled() && inputs.publish && needs.verify-artifacts.result == 'success' }}
+    needs: verify-artifacts
+    runs-on: ubuntu-latest
+    env:
+      TENCENT_COS_BUCKET: ${{ secrets.TENCENT_COS_BUCKET }}
+      TENCENT_COS_REGION: ${{ secrets.TENCENT_COS_REGION }}
+      TENCENT_COS_SECRET_ID: ${{ secrets.TENCENT_COS_SECRET_ID }}
+      TENCENT_COS_SECRET_KEY: ${{ secrets.TENCENT_COS_SECRET_KEY }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: lees-phantom-verified
+          path: public-assets
+      - run: sudo apt-get update -qq && sudo apt-get install -y minisign
+      - run: python3 -m pip install cos-python-sdk-v5==1.9.38
+      - run: python3 release-tools/lees-phantom/mirror.py stage cos public-assets
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: lees-phantom-ready-cos
+          path: public-assets/readiness-cos.json
+          retention-days: 7
+
+  mirror-r2:
+    if: ${{ !cancelled() && inputs.publish && needs.verify-artifacts.result == 'success' }}
+    needs: verify-artifacts
+    runs-on: ubuntu-latest
+    env:
+      CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: lees-phantom-verified
+          path: public-assets
+      - run: sudo apt-get update -qq && sudo apt-get install -y minisign
+      - run: python3 release-tools/lees-phantom/mirror.py stage r2 public-assets
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: lees-phantom-ready-r2
+          path: public-assets/readiness-r2.json
+          retention-days: 7
+
+  promote:
+    if: ${{ !cancelled() && inputs.publish && needs.mirror-cos.result == 'success' && needs.mirror-r2.result == 'success' }}
+    needs: [mirror-cos, mirror-r2]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TENCENT_COS_BUCKET: ${{ secrets.TENCENT_COS_BUCKET }}
+      TENCENT_COS_REGION: ${{ secrets.TENCENT_COS_REGION }}
+      TENCENT_COS_SECRET_ID: ${{ secrets.TENCENT_COS_SECRET_ID }}
+      TENCENT_COS_SECRET_KEY: ${{ secrets.TENCENT_COS_SECRET_KEY }}
+      CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: lees-phantom-verified
+          path: public-assets
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: lees-phantom-ready-*
+          path: public-assets
+          merge-multiple: true
+      - run: sudo apt-get update -qq && sudo apt-get install -y minisign
+      - run: python3 -m pip install cos-python-sdk-v5==1.9.38
+      - name: 从 GitHub 取得并验签旧版清单（不读取存储桶正文）
+        run: python3 release-tools/lees-phantom/previous.py public-assets
+      - name: 仅以 COS HEAD 与 R2 列表元数据复核并晋升双源 latest.json
+        run: python3 release-tools/lees-phantom/mirror.py promote both public-assets
       - name: 发布公开 GitHub Release
-        run: |
-          set -euo pipefail
-          DMG="public-assets/phantom-${VERSION}-macos-aarch64.dmg"
-          SUMS="public-assets/SHA256SUMS"
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$DMG" "$SUMS" --clobber
-            gh release edit "$TAG" --title "Phantom ${VERSION}" --notes-file release-notes.md
-          else
-            gh release create "$TAG" "$DMG" "$SUMS" \
-              --title "Phantom ${VERSION}" \
-              --notes-file release-notes.md
-          fi
+        run: node release-tools/lees-phantom/publish.mjs public-assets
+
+  cleanup-cos:
+    if: ${{ !cancelled() && inputs.publish && needs.promote.result == 'success' }}
+    needs: promote
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TENCENT_COS_BUCKET: ${{ secrets.TENCENT_COS_BUCKET }}
+      TENCENT_COS_REGION: ${{ secrets.TENCENT_COS_REGION }}
+      TENCENT_COS_SECRET_ID: ${{ secrets.TENCENT_COS_SECRET_ID }}
+      TENCENT_COS_SECRET_KEY: ${{ secrets.TENCENT_COS_SECRET_KEY }}
+      CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: lees-phantom-verified
+          path: public-assets
+      - run: sudo apt-get update -qq && sudo apt-get install -y minisign
+      - run: python3 -m pip install cos-python-sdk-v5==1.9.38
+      - run: python3 release-tools/lees-phantom/prune.py cos public-assets
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: lees-phantom-cleanup-cos
+          path: public-assets/cleanup-cos.json
+          retention-days: 7
+
+  cleanup-r2:
+    if: ${{ !cancelled() && inputs.publish && needs.promote.result == 'success' }}
+    needs: promote
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TENCENT_COS_BUCKET: ${{ secrets.TENCENT_COS_BUCKET }}
+      TENCENT_COS_REGION: ${{ secrets.TENCENT_COS_REGION }}
+      TENCENT_COS_SECRET_ID: ${{ secrets.TENCENT_COS_SECRET_ID }}
+      TENCENT_COS_SECRET_KEY: ${{ secrets.TENCENT_COS_SECRET_KEY }}
+      CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: lees-phantom-verified
+          path: public-assets
+      - run: sudo apt-get update -qq && sudo apt-get install -y minisign
+      - run: python3 -m pip install cos-python-sdk-v5==1.9.38
+      - run: python3 release-tools/lees-phantom/prune.py r2 public-assets
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: lees-phantom-cleanup-r2
+          path: public-assets/cleanup-r2.json
+          retention-days: 7

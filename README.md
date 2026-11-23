@@ -43,25 +43,25 @@
 
 | 平台 | 适用设备 | 安装文件 | 更新记录 |
 | --- | --- | --- | --- |
-| Mac | Apple Silicon，macOS 14.0+ | `phantom-1.0.0-macos-aarch64.dmg` | [发行版](https://github.com/lyq2010/lees-phantom-release/releases) |
+| Mac | Apple Silicon，macOS 14.0+ | `lees-phantom-1.0.0-macos-aarch64.dmg` | [发行版](https://github.com/lyq2010/lees-phantom-release/releases) |
 
-### Mac 安装说明
+### Mac 安装与自动更新
 
 1. 下载最新 `.dmg` 并通过发行页附带的 `SHA256SUMS` 校验完整性：
    ```sh
    shasum -a 256 -c SHA256SUMS
    ```
-2. 打开 `.dmg`，将 **Phantom** 拖入「应用程序」。
+2. 打开 `.dmg`，将 **Phantom** 拖入「应用程序」。首次从正式安装位置启动后，可精确确认来源的本次 DMG 会自动推出并移至废纸篓。
 3. 首次打开若被系统拦截，请在「系统设置 → 隐私与安全性」中点击「仍要打开」。
-4. 启动后导入或新建配置，开启「系统代理」或授权启用「增强模式（TUN）」即可使用。
+4. 后续新版本会在主窗口左下角提示；确认更新后将优先从主源（COS）并在必要时自动切至备源（R2）下载 `.app.tar.gz`，经 Ed25519 发行清单验签、Minisign 包验签与 SHA-256 校验后自动替换重启，并在新版健康启动后自动清理更新缓存与旧版备份。
 
-> Mac 版采用 ad-hoc 签名，不使用 Developer ID 或 Apple 公证。所有发行镜像均在发布前完成 APFS 只读挂载与 `codesign --verify --deep --strict` 校验。
+> Mac 版采用 ad-hoc 签名，不使用 Developer ID 或 Apple 公证。`.app.tar.gz` 仅用于应用内自动更新，首次安装请选择 DMG。
 
 ## 隐私与发版透明
 
 所有配置文件、代理规则、节点信息与流量观测记录均保存在本机，不自动上传，不绑定账号。
 
-原始源码在私有仓库 `lyq2010/lees-phantom` 维护；本仓库仅承载公开发版工作流、产品说明、更新日志与经过校验的公开白名单资产（`.dmg` 与 `SHA256SUMS`），不公开源码或构建日志。
+原始源码在私有仓库 `lyq2010/lees-phantom` 维护；本仓库仅承载公开发版工作流、产品说明、更新日志与经过校验的公开白名单资产（`.dmg`、`.app.tar.gz`、`.minisig`、`darwin-aarch64.json`、`release-manifest.json` 与 `SHA256SUMS`），不公开源码或构建日志。COS／R2 运维核对仅使用元数据，具体边界见[镜像核对约束](release-tools/lees-phantom/mirror-policy.md)。
 
 ## 反馈问题
 
