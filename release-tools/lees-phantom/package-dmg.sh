@@ -60,7 +60,7 @@ test "$actual_version" = "$VERSION" || { echo "ERROR: Version mismatch: $actual_
 test "$actual_id" = "com.lee.phantom" || { echo "ERROR: Bundle ID mismatch: $actual_id" >&2; exit 1; }
 test "$actual_icon" = "AppIcon" || { echo "ERROR: CFBundleIconFile mismatch: $actual_icon" >&2; exit 1; }
 test -f "$VERIFY_DIR/Phantom.app/Contents/Resources/AppIcon.icns" || { echo "ERROR: AppIcon.icns missing" >&2; exit 1; }
-test -x "$VERIFY_DIR/Phantom.app/Contents/Resources/bin/mihomo" || { echo "ERROR: mihomo binary missing or not executable" >&2; exit 1; }
+test -x "$VERIFY_DIR/Phantom.app/Contents/Resources/bin/phantom-engine" || { echo "ERROR: phantom-engine binary missing or not executable" >&2; exit 1; }
 test -f "$VERIFY_DIR/Phantom.app/Contents/Resources/geo/geoip.metadb" || { echo "ERROR: geoip.metadb missing" >&2; exit 1; }
 
 echo "==> Verifying strict code signature on copied Phantom.app..."
