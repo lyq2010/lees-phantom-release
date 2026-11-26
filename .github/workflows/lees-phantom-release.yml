@@ -59,10 +59,7 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 60
     env:
-      RUSTUP_TOOLCHAIN: '1.100.0'
       MACOSX_DEPLOYMENT_TARGET: '14.0'
-      CARGO_PROFILE_DEV_DEBUG: '0'
-      CARGO_PROFILE_TEST_DEBUG: '0'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -90,32 +87,28 @@ jobs:
           brew install minisign
           python3 -m pip install --break-system-packages --require-hashes -r private-source/packaging/macos/dmg/requirements.txt
 
-      - name: 校验 Apple Silicon 环境并安装固定 Rust 工具链
+      - name: 校验 Apple Silicon 与 Swift 环境
         run: |
           set -euo pipefail
           test "$(uname -m)" = arm64 || { echo "发行包必须在 Apple Silicon 上构建" >&2; exit 1; }
-          rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --no-self-update
-          rustc --version
-          cargo --version
           swift --version
 
-      - name: 运行全量 Engine 与 Swift 单元测试
+      - name: 运行 Swift 与内置 mihomo 集成测试
         if: ${{ inputs.run_tests }}
+        env:
+          PHANTOM_RUN_MIHOMO_LIVE_TESTS: '1'
         run: |
           set -euo pipefail
-          (cd private-source/Engine && cargo test --workspace --locked)
           (cd private-source && swift test)
 
-      - name: 从源码编译 phantom-engine 内核并校验 GeoIP 数据库
+      - name: 校验源码仓内置 mihomo 与 GeoIP 数据库（不在线下载内核）
         run: |
           set -euo pipefail
-          (cd private-source/Engine && cargo build --locked --release -p phantom-engine)
-          ENGINE_BIN="$(pwd)/private-source/Engine/target/release/phantom-engine"
-          test -x "$ENGINE_BIN" || { echo "ERROR: 缺少构建产物 $ENGINE_BIN" >&2; exit 1; }
+          MIHOMO_BIN="$(pwd)/private-source/Resources/bin/mihomo"
+          test -x "$MIHOMO_BIN" || { echo "ERROR: 源码仓缺少可执行文件 $MIHOMO_BIN" >&2; exit 1; }
           test -f private-source/Resources/geo/geoip.metadb || { echo "ERROR: 源码仓缺少 Resources/geo/geoip.metadb" >&2; exit 1; }
-          "$ENGINE_BIN" -v
-          ls -lh "$ENGINE_BIN" private-source/Resources/geo/geoip.metadb
-          echo "PHANTOM_ENGINE_BIN=$ENGINE_BIN" >> "$GITHUB_ENV"
+          "$MIHOMO_BIN" -v
+          ls -lh "$MIHOMO_BIN" private-source/Resources/geo/geoip.metadb
 
       - name: 编译组装 Phantom.app、APFS 拖拽安装 DMG 与应用内更新包
         env:
