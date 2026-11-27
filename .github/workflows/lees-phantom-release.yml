@@ -120,7 +120,10 @@ jobs:
           test -x private-source/Resources/bin/mihomo
           private-source/Resources/bin/mihomo -v
           test -f private-source/Resources/geo/geoip.metadb
-          ls -lh "$PHANTOM_ENGINE_BIN" private-source/Resources/geo/geoip.metadb
+          test -f private-source/Resources/geo/GeoLite2-ASN.mmdb
+          "$PHANTOM_ENGINE_BIN" --check-geoip private-source/Resources/geo/geoip.metadb
+          "$PHANTOM_ENGINE_BIN" --check-asn private-source/Resources/geo/GeoLite2-ASN.mmdb
+          ls -lh "$PHANTOM_ENGINE_BIN" private-source/Resources/geo/geoip.metadb private-source/Resources/geo/GeoLite2-ASN.mmdb
 
       - name: 编译组装 Phantom.app、APFS 拖拽安装 DMG 与应用内更新包
         env:

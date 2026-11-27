@@ -27,7 +27,7 @@
 - **配置与模块覆写** — Phantom Engine 原生加载 YAML 与 Surge `.conf`，支持局部编辑、语法校验、覆写模块及自定义规则；mihomo 模式将 `.conf` 转换为 YAML。
 - **解密与重写** — 使用 Phantom Engine 时支持 URL/Header 重写、MITM 主机名与 CA 生成、导入、导出及信任管理。
 
-当前版本 **1.1.2** 面向 Apple Silicon（macOS 14.0+）提供开箱即用的 `.dmg` 安装包（已内嵌 `phantom-engine`、`mihomo` 与 `geoip.metadb`）。Intel Mac 与 Windows 不在当前发行范围。
+当前版本 **1.1.3** 面向 Apple Silicon（macOS 14.0+）提供开箱即用的 `.dmg` 安装包（已内嵌 `phantom-engine`、`mihomo`、国别库与 ASN 库）。Intel Mac 与 Windows 不在当前发行范围。
 
 ## 常用能力
 
@@ -40,12 +40,13 @@
 | HTTP 处理 | Phantom Engine 下的解密、URL/Header 重写及证书管理 |
 | 仪表盘与诊断 | 活跃/历史连接、请求与内核日志、DNS 缓存清理与网络诊断 |
 | 低内存设计 | 关闭窗口自动释放视图树，按需采样与干净退出回收 |
+| 数据库更新 | 「更多」中手动更新国别库和 ASN 库，支持自定义下载地址与每周自动更新 |
 
 ## 选择你的版本
 
 | 平台 | 适用设备 | 安装文件 | 更新记录 |
 | --- | --- | --- | --- |
-| Mac | Apple Silicon，macOS 14.0+ | `lees-phantom-1.1.2-macos-aarch64.dmg` | [发行版](https://github.com/lyq2010/lees-phantom-release/releases) |
+| Mac | Apple Silicon，macOS 14.0+ | `lees-phantom-1.1.3-macos-aarch64.dmg` | [发行版](https://github.com/lyq2010/lees-phantom-release/releases) |
 
 ### Mac 安装与自动更新
 
