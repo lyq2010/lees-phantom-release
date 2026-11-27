@@ -17,7 +17,7 @@ on:
         default: false
         type: boolean
       run_tests:
-        description: 构建前运行全量 swift test 单元测试
+        description: 构建前运行 Rust、Swift 与双内核集成测试
         required: false
         default: true
         type: boolean
@@ -93,22 +93,34 @@ jobs:
           test "$(uname -m)" = arm64 || { echo "发行包必须在 Apple Silicon 上构建" >&2; exit 1; }
           swift --version
 
-      - name: 运行 Swift 与内置 mihomo 集成测试
+      - name: 从固定源码构建 Rust Phantom Engine
+        run: |
+          set -euo pipefail
+          cargo --version
+          cargo build --manifest-path private-source/Engine/Cargo.toml --locked --release -p phantom-engine
+          ENGINE_BIN="$(pwd)/private-source/Engine/target/release/phantom-engine"
+          test -x "$ENGINE_BIN"
+          "$ENGINE_BIN" -v
+          echo "PHANTOM_ENGINE_BIN=$ENGINE_BIN" >> "$GITHUB_ENV"
+
+      - name: 运行 Rust、Swift 与真实双内核集成测试
         if: ${{ inputs.run_tests }}
         env:
+          PHANTOM_RUN_ENGINE_LIVE_TESTS: '1'
           PHANTOM_RUN_MIHOMO_LIVE_TESTS: '1'
         run: |
           set -euo pipefail
+          cargo test --manifest-path private-source/Engine/Cargo.toml --workspace --locked
           (cd private-source && swift test)
 
-      - name: 校验源码仓内置 mihomo 与 GeoIP 数据库（不在线下载内核）
+      - name: 校验双内核与 GeoIP 数据库
         run: |
           set -euo pipefail
-          MIHOMO_BIN="$(pwd)/private-source/Resources/bin/mihomo"
-          test -x "$MIHOMO_BIN" || { echo "ERROR: 源码仓缺少可执行文件 $MIHOMO_BIN" >&2; exit 1; }
-          test -f private-source/Resources/geo/geoip.metadb || { echo "ERROR: 源码仓缺少 Resources/geo/geoip.metadb" >&2; exit 1; }
-          "$MIHOMO_BIN" -v
-          ls -lh "$MIHOMO_BIN" private-source/Resources/geo/geoip.metadb
+          test -x "$PHANTOM_ENGINE_BIN"
+          test -x private-source/Resources/bin/mihomo
+          private-source/Resources/bin/mihomo -v
+          test -f private-source/Resources/geo/geoip.metadb
+          ls -lh "$PHANTOM_ENGINE_BIN" private-source/Resources/geo/geoip.metadb
 
       - name: 编译组装 Phantom.app、APFS 拖拽安装 DMG 与应用内更新包
         env:

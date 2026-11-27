@@ -5,17 +5,21 @@
 ## 1. 准备源码与版本说明
 
 1. 确认两仓工作区与远端状态，只提交本次功能相关源码、测试、资源和正式文档；临时脚本、截图、分析报告、验收报告与构建产物不入库。
-2. `Resources/bin/mihomo` 直接提交在源码仓，保留可执行权限。核对 `mihomo -v` 和 SHA-256；发版只使用固定源码 SHA 中的二进制，不查询或下载上游最新版，不编译已停用的 Rust 内核。
+2. 从固定源码 SHA 的 `Engine/` 与 `Cargo.lock` 编译 Rust `phantom-engine`，使用 `cargo build --locked --release -p phantom-engine`。内核构建完成后通过 `PHANTOM_ENGINE_BIN` 传入测试与打包，不复用未知来源的旧内核，同时打包固定源码中的 `Resources/bin/mihomo` 作为可选回退，不在线下载替换。
 3. 同步两仓 README、CHANGELOG 和本地打包默认版本；发版仓新增 `release-tools/lees-phantom/notes-X.Y.Z.md`。说明简短列出用户可见变化，适当使用 emoji，不把内部实现或未经验证的能力写成已完成。
-4. 永久保留的停用内核源文件不作为清理对象；它们不参与应用构建。不要把用户订阅、节点凭据、运行配置或签名私钥提交到任一仓库。
+4. 原 mihomo 二进制与兼容源文件保留，不作为本轮接入的清理对象。不要把用户订阅、节点凭据、运行配置或签名私钥提交到任一仓库。
 
 ## 2. 本地验证
 
 在源码仓运行：
 
 ```bash
+source /Volumes/DISK/Applications/rust/env.sh
+cargo test --manifest-path Engine/Cargo.toml --workspace --locked
+cargo build --manifest-path Engine/Cargo.toml --locked --release -p phantom-engine
+export PHANTOM_ENGINE_BIN="${CARGO_TARGET_DIR:-$PWD/Engine/target}/release/phantom-engine"
 DEVELOPER_DIR=/Volumes/DISK/Applications/Xcode.app/Contents/Developer \
-PHANTOM_RUN_MIHOMO_LIVE_TESTS=1 \
+PHANTOM_RUN_ENGINE_LIVE_TESTS=1 \
 swift test --scratch-path /private/tmp/phantom-release-check
 
 git diff --check
@@ -24,11 +28,11 @@ bash -n scripts/bundle-app.sh packaging/macos/package.sh packaging/macos/verify-
 
 真实内核集成测试使用本机临时端口和合成数据，不接管系统代理、默认路由或 DNS。需要指定配置编译测试时，只使用独立合成 fixtures，通过 `PHANTOM_PROFILE_TEST_SOURCE` 和 `PHANTOM_PROFILE_TEST_OUTPUT` 指定临时输入/输出；不使用私人订阅充当公开测试数据。TUN 全局接管、睡眠和换网未实测时必须如实保留验证边界。
 
-检查 Workflow YAML、所有 `run` 块及打包脚本语法。macOS 包应包含 `mihomo`、`phantom-proxy-helper`、`phantom-tun-helper` 和 GeoIP 数据，严格验证嵌套代码签名；DMG 由源码仓 `packaging/macos/package.sh` 生成并只读挂载验包。`.app.tar.gz` 从同一份已验包的 `Phantom.app` 生成。
+检查 Workflow YAML、所有 `run` 块及打包脚本语法。macOS 包应包含 `phantom-engine`、`mihomo`、`phantom-proxy-helper`、`phantom-tun-helper` 和 GeoIP 数据，严格验证嵌套代码签名；DMG 由源码仓 `packaging/macos/package.sh` 生成并只读挂载验包。`.app.tar.gz` 从同一份已验包的 `Phantom.app` 生成。
 
 ## 3. 提交并推送双仓
 
-先提交并推送源码仓，记录 `git rev-parse HEAD` 得到的完整40位 SHA；再提交并推送发版仓的说明、文档和必要 Workflow 修正。发版必须使用包含全部迁移修复的源码提交，不能只使用恢复 mihomo 二进制的过渡提交。
+先提交并推送源码仓，记录 `git rev-parse HEAD` 得到的完整40位 SHA；再提交并推送发版仓的说明、文档和必要 Workflow 修正。发版必须使用包含全部迁移修复的源码提交，必须包含自建内核与原生功能入口的接入修改。
 
 不使用 `git add .` 混入私人配置或验收产物。确认 `git diff --cached --stat` 后提交；提交与公开说明不添加工具署名。
 
@@ -45,7 +49,7 @@ gh workflow run lees-phantom-release.yml \
 
 首次仅验包时使用 `publish=false`；用户已明确授权正式发布后可直接使用 `publish=true`，无需重复确认。触发前先检查是否有同版本或同源码的在途任务，避免重复发布。
 
-Workflow 按顺序执行：固定源码检出 → Swift/真实 mihomo 测试 → 内置资源校验 → Apple Silicon 应用与 APFS DMG 构建 → Minisign资产签名 → Ed25519发行清单签名与本地全量验签 → COS/R2暂存及元数据核对 → 双源latest晋升 → GitHub Release发布 → 旧镜像资产清理。
+Workflow 按顺序执行：固定源码检出 → Rust/Swift、真实双内核与往返冷切换测试 → 内置资源校验 → Apple Silicon 应用与 APFS DMG 构建 → Minisign资产签名 → Ed25519发行清单签名与本地全量验签 → COS/R2暂存及元数据核对 → 双源latest晋升 → GitHub Release发布 → 旧镜像资产清理。
 
 签名私钥及存储凭据只通过 GitHub Secrets 注入；不打印、不下载到开发机、不写入文档。保留现有权限隔离、白名单上传和双镜像发布顺序。
 

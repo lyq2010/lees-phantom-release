@@ -7,7 +7,7 @@
 ### 静默穿梭，掌控每一条连接。
 
 原生 macOS 网络代理与流量观测工具。
-基于内置 mihomo 内核，以轻量、低内存的原生界面管理节点策略、分流规则与实时连接。
+默认使用自建 Rust Phantom Engine，保留 mihomo 冷切换，以原生界面管理节点策略、分流规则与实时连接。
 
 ![Apple Silicon](https://img.shields.io/badge/macOS-Apple_Silicon-333333?logo=apple&logoColor=white)
 ![macOS 14.0+](https://img.shields.io/badge/macOS-14.0%2B-0071E3)
@@ -24,9 +24,10 @@
 - **实时活动与流量观测** — 按进程、域名、规则与策略多维度统计流量，配合独立仪表盘（`⌘D`）与悬浮速度窗（`⇧⌘M`），异常连接一目了然。
 - **高密度原生状态栏** — 五柱波形图标、R / G / D 出站模式角标、双行等宽实时速率，以及支持一键测速与切换的全宽策略组子菜单。
 - **双模式流量接管** — 一键开启系统代理或增强模式（TUN），按住 `Option` 点击菜单即可复制局域网终端代理导出命令。
-- **兼容配置与模块覆写** — 原生支持 YAML，并内置 Surge 配置导入转换与局部编辑（含语法校验与警告提示）、覆写模块及自定义规则管理。
+- **配置与模块覆写** — Phantom Engine 原生加载 YAML 与 Surge `.conf`，支持局部编辑、语法校验、覆写模块及自定义规则；mihomo 模式将 `.conf` 转换为 YAML。
+- **解密与重写** — 使用 Phantom Engine 时支持 URL/Header 重写、MITM 主机名与 CA 生成、导入、导出及信任管理。
 
-当前版本 **1.1.1** 面向 Apple Silicon（macOS 14.0+）提供开箱即用的 `.dmg` 安装包（已内嵌 `mihomo` 内核与 `geoip.metadb`）。Intel Mac 与 Windows 不在当前发行范围。
+当前版本 **1.1.2** 面向 Apple Silicon（macOS 14.0+）提供开箱即用的 `.dmg` 安装包（已内嵌 `phantom-engine`、`mihomo` 与 `geoip.metadb`）。Intel Mac 与 Windows 不在当前发行范围。
 
 ## 常用能力
 
@@ -35,7 +36,8 @@
 | 状态栏控制 | 五柱波形、R/G/D 模式角标、双行实时速率与全宽策略切换 |
 | 系统代理与 TUN | 一键接管系统代理与增强模式，支持复制本机/局域网终端代理命令 |
 | 策略与测速 | 批量延迟基准测试、Smart 智能优选避让与可视化节点编辑 |
-| 配置与规则 | YAML 配置管理、Surge 导入、编辑与转换、覆写模块与自定义规则 |
+| 配置与规则 | YAML 与 Surge `.conf`、覆写模块、自定义规则及双内核冷切换 |
+| HTTP 处理 | Phantom Engine 下的解密、URL/Header 重写及证书管理 |
 | 仪表盘与诊断 | 活跃/历史连接、请求与内核日志、DNS 缓存清理与网络诊断 |
 | 低内存设计 | 关闭窗口自动释放视图树，按需采样与干净退出回收 |
 
@@ -43,7 +45,7 @@
 
 | 平台 | 适用设备 | 安装文件 | 更新记录 |
 | --- | --- | --- | --- |
-| Mac | Apple Silicon，macOS 14.0+ | `lees-phantom-1.1.1-macos-aarch64.dmg` | [发行版](https://github.com/lyq2010/lees-phantom-release/releases) |
+| Mac | Apple Silicon，macOS 14.0+ | `lees-phantom-1.1.2-macos-aarch64.dmg` | [发行版](https://github.com/lyq2010/lees-phantom-release/releases) |
 
 ### Mac 安装与自动更新
 
