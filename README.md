@@ -22,18 +22,18 @@
 ## 为 macOS 打造的原生网络代理
 
 - **实时活动与流量观测** — 按进程、域名、规则与策略多维度统计流量，配合独立仪表盘（`⌘D`）与悬浮速度窗（`⇧⌘M`），异常连接一目了然。
-- **高密度原生状态栏** — 五柱波形图标、R / G / D 出站模式角标、双行等宽实时速率，以及支持一键测速与切换的全宽策略组子菜单。
+- **高密度原生状态栏** — Phantom 面具图标、R / G / D 出站模式角标、双行等宽实时速率，以及支持一键测速与切换的全宽策略组子菜单。
 - **双模式流量接管** — 一键开启系统代理或增强模式（TUN），按住 `Option` 点击菜单即可复制局域网终端代理导出命令。
 - **配置与模块覆写** — Phantom Engine 原生加载 YAML 与 Surge `.conf`，支持局部编辑、语法校验、覆写模块及自定义规则；mihomo 模式将 `.conf` 转换为 YAML。
 - **解密与重写** — 使用 Phantom Engine 时支持 URL/Header 重写、MITM 主机名与 CA 生成、导入、导出及信任管理。
 
-当前版本 **1.1.3** 面向 Apple Silicon（macOS 14.0+）提供开箱即用的 `.dmg` 安装包（已内嵌 `phantom-engine`、`mihomo`、国别库与 ASN 库）。Intel Mac 与 Windows 不在当前发行范围。
+当前版本 **1.1.4** 面向 Apple Silicon（macOS 14.0+）提供开箱即用的 `.dmg` 安装包（已内嵌 `phantom-engine`、`mihomo`、国别库与 ASN 库）。Intel Mac 与 Windows 不在当前发行范围。
 
 ## 常用能力
 
 | 功能 | 体验 |
 | --- | --- |
-| 状态栏控制 | 五柱波形、R/G/D 模式角标、双行实时速率与全宽策略切换 |
+| 状态栏控制 | Phantom 面具、R/G/D 模式角标、双行实时速率与全宽策略切换 |
 | 系统代理与 TUN | 一键接管系统代理与增强模式，支持复制本机/局域网终端代理命令 |
 | 策略与测速 | 批量延迟基准测试、Smart 智能优选避让与可视化节点编辑 |
 | 配置与规则 | YAML 与 Surge `.conf`、覆写模块、自定义规则及双内核冷切换 |
@@ -46,7 +46,7 @@
 
 | 平台 | 适用设备 | 安装文件 | 更新记录 |
 | --- | --- | --- | --- |
-| Mac | Apple Silicon，macOS 14.0+ | `lees-phantom-1.1.3-macos-aarch64.dmg` | [发行版](https://github.com/lyq2010/lees-phantom-release/releases) |
+| Mac | Apple Silicon，macOS 14.0+ | `lees-phantom-1.1.4-macos-aarch64.dmg` | [发行版](https://github.com/lyq2010/lees-phantom-release/releases) |
 
 ### Mac 安装与自动更新
 
